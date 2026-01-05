@@ -17,7 +17,7 @@
       set -e
 
       # =========================
-      # One-time cleanup
+      # Cleanup once
       # =========================
       if [ ! -f /home/user/.cleanup_done ]; then
         rm -rf /home/user/.gradle/* /home/user/.emu/* || true
@@ -32,70 +32,29 @@
       # =========================
       # Paths
       # =========================
-
-      SKIP_QCOW2_DOWNLOAD=0
-
       VM_DIR="$HOME/qemu"
       RAW_DISK="$VM_DIR/windows.qcow2"
-
-      # 📥 ISO Windows 11 gốc bạn cung cấp link
-      WIN_ISO="$VM_DIR/Win11_25H2_English_x64.iso"
-
+      WIN_ISO="$VM_DIR/Win11_English_x64.iso"
       VIRTIO_ISO="$VM_DIR/virtio-win.iso"
       NOVNC_DIR="$HOME/noVNC"
       OVMF_DIR="$HOME/qemu/ovmf"
       OVMF_CODE="$OVMF_DIR/OVMF_CODE.fd"
       OVMF_VARS="$OVMF_DIR/OVMF_VARS.fd"
 
-      mkdir -p "$OVMF_DIR"
-      mkdir -p "$VM_DIR"
+      mkdir -p "$VM_DIR" "$OVMF_DIR"
 
       # =========================
-      # Download OVMF firmware if missing
-      # =========================
-      if [ ! -f "$OVMF_CODE" ]; then
-        echo "Downloading OVMF_CODE.fd..."
-        wget -O "$OVMF_CODE" \
-          https://qemu.weilnetz.de/test/ovmf/usr/share/OVMF/OVMF_CODE.fd
-      else
-        echo "OVMF_CODE.fd already exists, skipping download."
-      fi
-
-      if [ ! -f "$OVMF_VARS" ]; then
-        echo "Downloading OVMF_VARS.fd..."
-        wget -O "$OVMF_VARS" \
-          https://qemu.weilnetz.de/test/ovmf/usr/share/OVMF/OVMF_VARS.fd
-      else
-        echo "OVMF_VARS.fd already exists, skipping download."
-      fi
-
-      # =========================
-      # Create QCOW2 disk if missing
-      # =========================
-      if [ "$SKIP_QCOW2_DOWNLOAD" -ne 1 ]; then
-        if [ ! -f "$RAW_DISK" ]; then
-          echo "Creating QCOW2 disk..."
-          qemu-img create -f qcow2 "$RAW_DISK" 50G
-        else
-          echo "QCOW2 disk already exists, skipping creation."
-        fi
-      else
-        echo "SKIP_QCOW2_DOWNLOAD=1 → QCOW2 logic skipped."
-      fi
-
-      # =========================
-      # Download Windows 11 ISO if missing
+      # Download Windows 11 ISO from GitHub / idx mirror
       # =========================
       if [ ! -f "$WIN_ISO" ]; then
-        echo "Downloading Windows 11 ISO (gốc)..."
-        wget -O "$WIN_ISO" \
-"https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=aec9af94-39bd-4f6f-8527-05895632e984&P1=1767663538&P2=601&P3=2&P4=j1RNjAfGYyf%2bbfjdalBkxhpdKGqsV1J5be45M0vmQDYM1rbaf4qgvGxuTSuL0Yl27cLqXi64qLX%2bc%2bSJMUSjYmyhHP5udrXTjvwkkZr72bwTZrQu%2b6z0WNku8DHdBG38xipHS%2bz77A5o9ao%2bW%2bwobCarh58p9wB6EyVQy6%2bCotAIWVK2PSYHRe5h%2bo5%2fIzvYUIFyCm6%2bPiFQTeRpywu6tOBI4WTwXeAW5TWR%2bmK4nhRmTcDxe6Rze%2bbPTRXKGRIk822ITOMuSjbzSUDkgqNQTKbtQcfL6ly6nvHEHOF8Hx8U9eSp1KC5VrQjNVVcxuM96FqAUpyuFGKkSTyVjNce9g%3d%3d"
+        echo "Downloading Windows 11 ISO from idx mirror..."
+        wget -O "$WIN_ISO" "https://github.com/idx-mirror/Win11/releases/download/25H2/Win11_English_x64.iso"
       else
         echo "Windows 11 ISO already exists, skipping download."
       fi
 
       # =========================
-      # Download VirtIO drivers ISO if missing
+      # Download VirtIO drivers ISO
       # =========================
       if [ ! -f "$VIRTIO_ISO" ]; then
         echo "Downloading VirtIO drivers ISO..."
@@ -106,19 +65,32 @@
       fi
 
       # =========================
-      # Clone noVNC if missing
+      # Download OVMF firmware
       # =========================
-      if [ ! -d "$NOVNC_DIR/.git" ]; then
-        echo "Cloning noVNC..."
-        git clone https://github.com/novnc/noVNC.git "$NOVNC_DIR"
-      else
-        echo "noVNC already exists, skipping clone."
+      if [ ! -f "$OVMF_CODE" ]; then
+        wget -O "$OVMF_CODE" https://qemu.weilnetz.de/test/ovmf/usr/share/OVMF/OVMF_CODE.fd
+      fi
+      if [ ! -f "$OVMF_VARS" ]; then
+        wget -O "$OVMF_VARS" https://qemu.weilnetz.de/test/ovmf/usr/share/OVMF/OVMF_VARS.fd
       fi
 
       # =========================
-      # Start QEMU (KVM + VirtIO + UEFI)
+      # Clone noVNC if missing
       # =========================
-      echo "Starting QEMU..."
+      if [ ! -d "$NOVNC_DIR/.git" ]; then
+        git clone https://github.com/novnc/noVNC.git "$NOVNC_DIR"
+      fi
+
+      # =========================
+      # Create QCOW2 disk if missing
+      # =========================
+      if [ ! -f "$RAW_DISK" ]; then
+        qemu-img create -f qcow2 "$RAW_DISK" 50G
+      fi
+
+      # =========================
+      # Start QEMU (Windows 11)
+      # =========================
       nohup qemu-system-x86_64 \
         -enable-kvm \
         -cpu host,+topoext,hv_relaxed,hv_spinlocks=0x1fff,hv-passthrough,+pae,+nx,kvm=on,+svm \
@@ -144,21 +116,15 @@
         > /tmp/qemu.log 2>&1 &
 
       # =========================
-      # Start noVNC on port 8888
+      # Start noVNC
       # =========================
-      echo "Starting noVNC..."
-      nohup "$NOVNC_DIR/utils/novnc_proxy" \
-        --vnc 127.0.0.1:5900 \
-        --listen 8888 \
+      nohup "$NOVNC_DIR/utils/novnc_proxy" --vnc 127.0.0.1:5900 --listen 8888 \
         > /tmp/novnc.log 2>&1 &
 
       # =========================
       # Start Cloudflared tunnel
       # =========================
-      echo "Starting Cloudflared tunnel..."
-      nohup cloudflared tunnel \
-        --no-autoupdate \
-        --url http://localhost:8888 \
+      nohup cloudflared tunnel --no-autoupdate --url http://localhost:8888 \
         > /tmp/cloudflared.log 2>&1 &
 
       sleep 10
@@ -177,27 +143,15 @@
       # =========================
       # Keep workspace alive
       # =========================
-      while true; do
-        sleep 60
-      done
-
+      while true; do sleep 60; done
     '';
   };
 
   idx.previews = {
     enable = true;
     previews = {
-      qemu = {
-        manager = "web";
-        command = [
-          "bash" "-lc"
-          "echo 'noVNC running on port 8888'"
-        ];
-      };
-      terminal = {
-        manager = "web";
-        command = [ "bash" ];
-      };
+      qemu = { manager = "web"; command = ["bash" "-lc" "echo 'noVNC running on port 8888'"]; };
+      terminal = { manager = "web"; command = ["bash"]; };
     };
   };
 }
