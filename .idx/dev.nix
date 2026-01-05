@@ -38,8 +38,8 @@
       VM_DIR="$HOME/qemu"
       RAW_DISK="$VM_DIR/windows.qcow2"
 
-      # ✅ Thay bằng ISO Windows 11 gốc từ Microsoft
-      WIN_ISO="$VM_DIR/Win11_English_x64.iso"
+      # 📥 ISO Windows 11 gốc bạn cung cấp link
+      WIN_ISO="$VM_DIR/Win11_25H2_English_x64.iso"
 
       VIRTIO_ISO="$VM_DIR/virtio-win.iso"
       NOVNC_DIR="$HOME/noVNC"
@@ -48,6 +48,7 @@
       OVMF_VARS="$OVMF_DIR/OVMF_VARS.fd"
 
       mkdir -p "$OVMF_DIR"
+      mkdir -p "$VM_DIR"
 
       # =========================
       # Download OVMF firmware if missing
@@ -68,10 +69,8 @@
         echo "OVMF_VARS.fd already exists, skipping download."
       fi
 
-      mkdir -p "$VM_DIR"
-
       # =========================
-      # Download QCOW2 disk if missing
+      # Create QCOW2 disk if missing
       # =========================
       if [ "$SKIP_QCOW2_DOWNLOAD" -ne 1 ]; then
         if [ ! -f "$RAW_DISK" ]; then
@@ -85,12 +84,12 @@
       fi
 
       # =========================
-      # Download Windows 11 ISO from Microsoft if missing
+      # Download Windows 11 ISO if missing
       # =========================
       if [ ! -f "$WIN_ISO" ]; then
         echo "Downloading Windows 11 ISO (gốc)..."
         wget -O "$WIN_ISO" \
-          https://software-download.microsoft.com/pr/Win11_English_x64.iso
+"https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=aec9af94-39bd-4f6f-8527-05895632e984&P1=1767663538&P2=601&P3=2&P4=j1RNjAfGYyf%2bbfjdalBkxhpdKGqsV1J5be45M0vmQDYM1rbaf4qgvGxuTSuL0Yl27cLqXi64qLX%2bc%2bSJMUSjYmyhHP5udrXTjvwkkZr72bwTZrQu%2b6z0WNku8DHdBG38xipHS%2bz77A5o9ao%2bW%2bwobCarh58p9wB6EyVQy6%2bCotAIWVK2PSYHRe5h%2bo5%2fIzvYUIFyCm6%2bPiFQTeRpywu6tOBI4WTwXeAW5TWR%2bmK4nhRmTcDxe6Rze%2bbPTRXKGRIk822ITOMuSjbzSUDkgqNQTKbtQcfL6ly6nvHEHOF8Hx8U9eSp1KC5VrQjNVVcxuM96FqAUpyuFGKkSTyVjNce9g%3d%3d"
       else
         echo "Windows 11 ISO already exists, skipping download."
       fi
@@ -111,7 +110,6 @@
       # =========================
       if [ ! -d "$NOVNC_DIR/.git" ]; then
         echo "Cloning noVNC..."
-        mkdir -p "$NOVNC_DIR"
         git clone https://github.com/novnc/noVNC.git "$NOVNC_DIR"
       else
         echo "noVNC already exists, skipping clone."
@@ -179,12 +177,10 @@
       # =========================
       # Keep workspace alive
       # =========================
-      elapsed=0
       while true; do
-        echo "Time elapsed: $elapsed min"
-        ((elapsed++))
         sleep 60
       done
+
     '';
   };
 
