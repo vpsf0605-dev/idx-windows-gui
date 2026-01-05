@@ -17,7 +17,7 @@
       set -e
 
       # =========================
-      # Cleanup once
+      # One-time cleanup
       # =========================
       if [ ! -f /home/user/.cleanup_done ]; then
         rm -rf /home/user/.gradle/* /home/user/.emu/* || true
@@ -32,47 +32,44 @@
       # =========================
       # Paths
       # =========================
+      SKIP_QCOW2_DOWNLOAD=0
+
       VM_DIR="$HOME/qemu"
-      RAW_DISK="$VM_DIR/windows.qcow2"
-      WIN_ISO="$VM_DIR/Win11_English_x64.iso"
+      RAW_DISK="$VM_DIR/winserver2025.qcow2"
+      WIN_ISO="$VM_DIR/winserver2025.iso"
       VIRTIO_ISO="$VM_DIR/virtio-win.iso"
       NOVNC_DIR="$HOME/noVNC"
+
       OVMF_DIR="$HOME/qemu/ovmf"
       OVMF_CODE="$OVMF_DIR/OVMF_CODE.fd"
       OVMF_VARS="$OVMF_DIR/OVMF_VARS.fd"
 
-      mkdir -p "$VM_DIR" "$OVMF_DIR"
-
-      # =========================
-      # Download Windows 11 ISO from GitHub / idx mirror
-      # =========================
-      if [ ! -f "$WIN_ISO" ]; then
-        echo "Downloading Windows 11 ISO from idx mirror..."
-        wget -O "$WIN_ISO" "https://github.com/idx-mirror/Win11/releases/download/25H2/Win11_English_x64.iso"
-      else
-        echo "Windows 11 ISO already exists, skipping download."
-      fi
-
-      # =========================
-      # Download VirtIO drivers ISO
-      # =========================
-      if [ ! -f "$VIRTIO_ISO" ]; then
-        echo "Downloading VirtIO drivers ISO..."
-        wget -O "$VIRTIO_ISO" \
-          https://github.com/virtio-win/virtio-win-pkg-scripts/releases/download/virtio-0.1.271/virtio-win-0.1.271.iso
-      else
-        echo "VirtIO ISO already exists, skipping download."
-      fi
+      mkdir -p "$OVMF_DIR" "$VM_DIR"
 
       # =========================
       # Download OVMF firmware
       # =========================
-      if [ ! -f "$OVMF_CODE" ]; then
-        wget -O "$OVMF_CODE" https://qemu.weilnetz.de/test/ovmf/usr/share/OVMF/OVMF_CODE.fd
+      [ ! -f "$OVMF_CODE" ] && wget -O "$OVMF_CODE" https://qemu.weilnetz.de/test/ovmf/usr/share/OVMF/OVMF_CODE.fd
+      [ ! -f "$OVMF_VARS" ] && wget -O "$OVMF_VARS" https://qemu.weilnetz.de/test/ovmf/usr/share/OVMF/OVMF_VARS.fd
+
+      # =========================
+      # Create QCOW2 disk if missing
+      # =========================
+      if [ "$SKIP_QCOW2_DOWNLOAD" -ne 1 ]; then
+        [ ! -f "$RAW_DISK" ] && qemu-img create -f qcow2 "$RAW_DISK" 20G
       fi
-      if [ ! -f "$OVMF_VARS" ]; then
-        wget -O "$OVMF_VARS" https://qemu.weilnetz.de/test/ovmf/usr/share/OVMF/OVMF_VARS.fd
+
+      # =========================
+      # Check Windows Server 2025 ISO
+      # =========================
+      if [ ! -f "$WIN_ISO" ]; then
+        echo "⚡ Vui lòng upload ISO Windows Server 2025 vào: $WIN_ISO"
       fi
+
+      # =========================
+      # Download VirtIO drivers ISO if missing
+      # =========================
+      [ ! -f "$VIRTIO_ISO" ] && wget -O "$VIRTIO_ISO" https://github.com/kmille36/idx-windows-gui/releases/download/1.0/virtio-win-0.1.271.iso
 
       # =========================
       # Clone noVNC if missing
@@ -82,14 +79,7 @@
       fi
 
       # =========================
-      # Create QCOW2 disk if missing
-      # =========================
-      if [ ! -f "$RAW_DISK" ]; then
-        qemu-img create -f qcow2 "$RAW_DISK" 50G
-      fi
-
-      # =========================
-      # Start QEMU (Windows 11)
+      # Start QEMU (KVM + VirtIO + UEFI)
       # =========================
       nohup qemu-system-x86_64 \
         -enable-kvm \
@@ -118,24 +108,25 @@
       # =========================
       # Start noVNC
       # =========================
-      nohup "$NOVNC_DIR/utils/novnc_proxy" --vnc 127.0.0.1:5900 --listen 8888 \
+      nohup "$NOVNC_DIR/utils/novnc_proxy" \
+        --vnc 127.0.0.1:5900 \
+        --listen 8888 \
         > /tmp/novnc.log 2>&1 &
 
       # =========================
-      # Start Cloudflared tunnel
+      # Start Cloudflared
       # =========================
-      nohup cloudflared tunnel --no-autoupdate --url http://localhost:8888 \
+      nohup cloudflared tunnel \
+        --no-autoupdate \
+        --url http://localhost:8888 \
         > /tmp/cloudflared.log 2>&1 &
 
       sleep 10
 
       if grep -q "trycloudflare.com" /tmp/cloudflared.log; then
         URL=$(grep -o "https://[a-z0-9.-]*trycloudflare.com" /tmp/cloudflared.log | head -n1)
-        echo "========================================="
-        echo " 🌍 Windows 11 QEMU + noVNC ready:"
-        echo "     $URL/vnc.html"
-        echo "     $URL/vnc.html" > /home/user/idx-windows-gui/noVNC-URL.txt
-        echo "========================================="
+        echo "🌍 Windows Server 2025 QEMU + noVNC ready: $URL/vnc.html"
+        echo "$URL/vnc.html" > /home/user/idx-windows-gui/noVNC-URL.txt
       else
         echo "❌ Cloudflared tunnel failed"
       fi
@@ -150,8 +141,16 @@
   idx.previews = {
     enable = true;
     previews = {
-      qemu = { manager = "web"; command = ["bash" "-lc" "echo 'noVNC running on port 8888'"]; };
-      terminal = { manager = "web"; command = ["bash"]; };
+      qemu = {
+        manager = "web";
+        command = [
+          "bash" "-lc" "echo 'noVNC running on port 8888'"
+        ];
+      };
+      terminal = {
+        manager = "web";
+        command = [ "bash" ];
+      };
     };
   };
 }
